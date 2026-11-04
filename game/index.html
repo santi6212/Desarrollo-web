@@ -1,0 +1,206 @@
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shmup - Hitbox Test</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #1a1b26;
+            color: #eceff4;
+            font-family: sans-serif;
+            flex-direction: column;
+            margin: 0;
+        }
+        canvas {
+            border: 4px solid #7aa2f7;
+            background-color: #0f1016;
+            image-rendering: pixelated; 
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="miCanvas" width="720" height="900"></canvas>
+
+    <script>
+        const canvas = document.getElementById('miCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const ESCALA = 2;
+        ctx.scale(ESCALA, ESCALA);
+        ctx.imageSmoothingEnabled = false;
+
+        const spriteSheet = new Image();
+        spriteSheet.src = 'marisa.png';
+
+        // Imagen de las balas (asegúrate de tenerla o cámbiale el nombre si usas otra)
+        const bulletSheet = new Image();
+        bulletSheet.src = 'bullets.png'; // Cambia por el nombre de tu archivo de balas
+
+        const ANCHO_PANTALLA = canvas.width / ESCALA;
+        const ALTO_PANTALLA = canvas.height / ESCALA;
+        
+        const SPRITE_ANCHO = 32;  
+        const SPRITE_ALTO = 46;   
+
+        let jugadorX = (ANCHO_PANTALLA / 2) - (SPRITE_ANCHO / 2);
+        let jugadorY = ALTO_PANTALLA - 150;
+        let velocidad = 5;
+
+        // --- ARREGLO DE BALAS ENEMIGAS ---
+        const balasEnemigas = [];
+        let contadorFrames = 0;
+
+        const teclas = {
+            ArrowLeft: false,
+            ArrowRight: false,
+            ArrowUp: false,
+            ArrowDown: false
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if (teclas.hasOwnProperty(e.key)) teclas[e.key] = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (teclas.hasOwnProperty(e.key)) teclas[e.key] = false;
+        });
+
+        function bucleJuego() {
+            actualizar();
+            dibujar();
+            requestAnimationFrame(bucleJuego);
+        }
+
+        function actualizar() {
+            // Movimiento del jugador
+            if (teclas.ArrowLeft && jugadorX > 0) {
+                jugadorX -= velocidad;
+            }
+            if (teclas.ArrowRight && jugadorX < ANCHO_PANTALLA - SPRITE_ANCHO) {
+                jugadorX += velocidad;
+            }
+            if (teclas.ArrowUp && jugadorY > 0) {
+                jugadorY -= velocidad;
+            }
+            if (teclas.ArrowDown && jugadorY < ALTO_PANTALLA - SPRITE_ALTO) {
+                jugadorY += velocidad;
+            }
+
+            // --- GENERAR BALAS DESDE LAS ESQUINAS CADA CIERTO TIEMPO ---
+            contadorFrames++;
+            if (contadorFrames % 45 === 0) { // Cada 45 frames sale una bala nueva
+                crearBalaDesdeEsquina();
+            }
+
+            // --- ACTUALIZAR POSICIÓN DE LAS BALAS Y VERIFICAR COLISIÓN ---
+            for (let i = balasEnemigas.length - 1; i >= 0; i--) {
+                let b = balasEnemigas[i];
+                b.x += b.vx;
+                b.y += b.vy;
+
+                // Eliminar bala si sale de la pantalla
+                if (b.x < -20 || b.x > ANCHO_PANTALLA + 20 || b.y < -20 || b.y > ALTO_PANTALLA + 20) {
+                    balasEnemigas.splice(i, 1);
+                    continue;
+                }
+
+                // --- HITBOX DE MARISA VS BALA (AABB) ---
+                // Reducimos un poco la caja de Marisa para que la colisión sea justa (zona central)
+                const hitboxMarisa = {
+                    x: jugadorX + 10,
+                    y: jugadorY + 12,
+                    ancho: SPRITE_ANCHO - 20,
+                    alto: SPRITE_ALTO - 20
+                };
+
+                const hitboxBala = {
+                    x: b.x,
+                    y: b.y,
+                    ancho: 8,
+                    alto: 8
+                };
+
+                // Comprobación de intersección de rectángulos
+                if (
+                    hitboxMarisa.x < hitboxBala.x + hitboxBala.ancho &&
+                    hitboxMarisa.x + hitboxMarisa.ancho > hitboxBala.x &&
+                    hitboxMarisa.y < hitboxBala.y + hitboxBala.alto &&
+                    hitboxMarisa.y + hitboxMarisa.ancho > hitboxBala.y // Ojo: hitboxMarisa.alto
+                ) {
+                    // ¡COLISIÓN DETECTADA! (Por ahora solo reiniciamos la posición para probar)
+                    console.log("¡Te dieron!");
+                    jugadorX = (ANCHO_PANTALLA / 2) - (SPRITE_ANCHO / 2);
+                    jugadorY = ALTO_PANTALLA - 150;
+                    balasEnemigas.splice(i, 1);
+                }
+            }
+        }
+
+        function crearBalaDesdeEsquina() {
+            // Escogemos al azar una de las 2 esquinas superiores (Izquierda o Derecha)
+            let esIzquierda = Math.random() < 0.5;
+            let origenX = esIzquierda ? 0 : ANCHO_PANTALLA;
+            let origenY = 0;
+
+            let velocidadBala = 3;
+
+            // Calculamos el ángulo directo hacia donde está Marisa en este preciso instante
+            let angulo = Math.atan2((jugadorY + SPRITE_ALTO/2) - origenY, (jugadorX + SPRITE_ANCHO/2) - origenX);
+
+            balasEnemigas.push({
+                x: origenX,
+                y: origenY,
+                vx: Math.cos(angulo) * velocidadBala,
+                vy: Math.sin(angulo) * velocidadBala
+            });
+        }
+
+        function dibujar() {
+            ctx.clearRect(0, 0, ANCHO_PANTALLA, ALTO_PANTALLA);
+
+            // 1. Dibujar Balas Enemigas
+            // (Si aún no cargas el sprite de balas, esto dibuja un círculo rojo temporal para probar)
+            ctx.fillStyle = "#ff5555";
+            for (let i = 0; i < balasEnemigas.length; i++) {
+                let b = balasEnemigas[i];
+                // Si ya tienes cargada la imagen de balas, puedes usar ctx.drawImage aquí:
+                ctx.beginPath();
+                ctx.arc(b.x + 4, b.y + 4, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 2. Dibujar a Marisa
+            let fuenteY = 32;    
+            let fuenteX = 0;    
+
+            if (teclas.ArrowLeft) {
+                fuenteX = 40;     
+            } else if (teclas.ArrowRight) {
+                fuenteX = 80;    
+            } else {
+                fuenteX = 0;    
+            }
+
+            ctx.drawImage(
+                spriteSheet,
+                fuenteX, fuenteY, SPRITE_ANCHO, SPRITE_ALTO,
+                jugadorX, jugadorY, SPRITE_ANCHO, SPRITE_ALTO
+            );
+
+            // --- VISUALIZAR LA HITBOX DE MARISA (Para ajustar si es muy justa o muy grande) ---
+            ctx.strokeStyle = "rgba(0, 255, 0, 0.6)"; // Verde semi-transparente
+            ctx.strokeRect(jugadorX + 10, jugadorY + 12, SPRITE_ANCHO - 20, SPRITE_ALTO - 20);
+        }
+
+        spriteSheet.onload = () => {
+            bucleJuego();
+        };
+    </script>
+
+</body>
+</html>
